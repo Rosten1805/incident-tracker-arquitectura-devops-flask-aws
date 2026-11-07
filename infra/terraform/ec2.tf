@@ -10,7 +10,10 @@ resource "aws_instance" "jenkins_server" {
   iam_instance_profile        = aws_iam_instance_profile.jenkins_ec2.name
   associate_public_ip_address = true
 
-  user_data                   = file("${path.module}/user_data/jenkins.sh")
+  user_data = templatefile("${path.module}/user_data/jenkins.sh.tpl", {
+    aws_region            = var.aws_region
+    jenkins_ecr_repo_url  = aws_ecr_repository.jenkins_image.repository_url
+  })
   user_data_replace_on_change = true
 
   tags = merge(local.common_tags, {

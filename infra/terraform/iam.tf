@@ -46,6 +46,54 @@ resource "aws_iam_role_policy_attachment" "jenkins_ecr_write" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
 }
 
+# Permisos que el Jenkinsfile necesita y que NINGUN managed policy cubre
+# sin pasarse de amplio: localizar app-server y el ALB en tiempo de
+# ejecucion (sin hardcodear IDs en el pipeline), y enviar/leer comandos
+# SSM Run Command contra esa instancia concreta (no contra cualquier
+# instancia de la cuenta).
+resource "aws_iam_role_policy" "jenkins_deploy" {
+  name = "jenkins-pipeline-deploy"
+  role = aws_iam_role.jenkins_ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DescribeParaResolverDestino"
+        Effect = "Allow"
+        # ec2:DescribeInstances y elasticloadbalancing:DescribeLoadBalancers
+        # son acciones de solo lectura que AWS no permite restringir a nivel
+        # de recurso (siempre Resource = "*"); es su comportamiento normal.
+        Action = [
+          "ec2:DescribeInstances",
+          "elasticloadbalancing:DescribeLoadBalancers",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "EnviarComandoSoloAAppServer"
+        Effect = "Allow"
+        Action = ["ssm:SendCommand"]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+          "arn:aws:ec2:${var.aws_region}:*:instance/*",
+        ]
+        Condition = {
+          StringEquals = {
+            "ssm:resourceTag/Name" = "${var.project_name}-app-server"
+          }
+        }
+      },
+      {
+        Sid      = "LeerResultadoDelComando"
+        Effect   = "Allow"
+        Action   = ["ssm:GetCommandInvocation"]
+        Resource = "*"
+      },
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "jenkins_ec2" {
   name = "student-jenkins-ec2-profile"
   role = aws_iam_role.jenkins_ec2.name

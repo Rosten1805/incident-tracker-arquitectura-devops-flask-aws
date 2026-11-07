@@ -32,22 +32,24 @@ API REST mínima de gestión de incidencias ("Task / Incident Tracker"), elegida
 
 ## 3. Arquitectura (ver diagrama `Arquitectura DevOps Flask en AWS.png`)
 
-**Flujo de CI/CD (Jenkinsfile, 10 stages):**
-1. Checkout del código desde GitHub
-2. Instalar dependencias / preparar entorno de build
-3. Tests unitarios con pytest + coverage (gate de calidad)
-4. Build de imagen Docker
-5. Etiquetar la imagen con `<commit-sha>` y `latest`
-6. Login y push a Amazon ECR (desde el rol de `jenkins-server`, que tiene permiso de escritura)
-7. `terraform plan` / `apply` (crear o actualizar infraestructura)
-8. Desplegar la nueva versión en el `app-server` vía **AWS Systems Manager Run Command**
-9. Smoke test: `GET /health` y `GET /version` a través del ALB, verificando que el SHA desplegado es el esperado
-10. Si falla: rollback automático a la última imagen estable etiquetada en ECR
+**Flujo de CI/CD (`Jenkinsfile`, 7 stages + rollback automático en `post`):**
+1. Checkout del código desde GitHub (y resuelve en caliente: SHA del commit, cuenta AWS, instancia de `app-server`, DNS del ALB — nada hardcodeado)
+2. Tests unitarios con pytest + coverage (gate de calidad)
+3. Build de la imagen Docker, etiquetada solo con `<commit-sha>` (nunca `latest`)
+4. Login y push a Amazon ECR (desde el rol de `jenkins-server`, que tiene permiso de escritura)
+5. Desplegar esa versión en el `app-server` vía **AWS Systems Manager Run Command**
+6. Smoke test: `GET /health` y `GET /version` a través del ALB, verificando que el SHA desplegado es el esperado
+7. Marcar como estable: **solo si el smoke test ha pasado**, se mueve el tag `:stable` en ECR a esta imagen
+8. Si cualquier stage anterior falla (`post { failure { ... } }`): rollback automático — vuelve a desplegar lo que `:stable` tenga en ese momento (la última versión que sí funcionó) y solo comprueba que `/health` vuelve a responder sano
+
+**Por qué `:stable` en vez de `:latest`**: con `:latest` el rollback tendría que inspeccionar qué había desplegado antes en el servidor remoto (frágil, acopla el pipeline al estado de la instancia). Con `:stable`, el propio pipeline mueve ese tag solo cuando confirma que una versión funciona — el rollback nunca necesita preguntarle nada al servidor, simplemente redespliega lo que `:stable` ya apunta.
+
+**Nota de diseño — por qué Terraform NO está en este pipeline**: se consideró inicialmente un stage de `terraform plan`/`apply` aquí, pero se descartó conscientemente. Darle a `jenkins-server` permisos para crear/modificar EC2, IAM o el ALB rompería el mínimo privilegio real que se diseñó para sus dos roles (sección 5); y no es el patrón habitual tampoco: la infraestructura cambia con poca frecuencia y se aplica aparte (manualmente, por quien gestiona la infra), mientras que este pipeline se dispara en cada commit de código de la app. *Respuesta de entrevista: "separé el ciclo de vida de la infraestructura del ciclo de vida de los despliegues de la app a propósito — son cadencias y permisos distintos."*
 
 **Runtime en AWS:**
 - **ALB** (Application Load Balancer) — en ≥2 subredes de AZs distintas (requisito de AWS para crear un ALB), balanceo + health check `/health`, único listener HTTP:80 (sin TLS — necesitaría dominio propio + ACM, fuera de alcance para esta demo)
 - **EC2 `app-server`** (subred pública) — Docker + Flask + SQLite + CloudWatch Agent, Security Group solo acepta el puerto de la app desde el SG del ALB; **sin puerto 22** (acceso a shell vía SSM Session Manager, no SSH)
-- **EC2 `jenkins-server`** — Jenkins corriendo en Docker, puerto 8080 abierto solo a mi IP; **sin puerto 22** (SSM Session Manager también aquí)
+- **EC2 `jenkins-server`** — Jenkins corriendo en Docker, puerto 8080 abierto solo a mi IP; **sin puerto 22** (SSM Session Manager también aquí). La imagen oficial `jenkins/jenkins:lts` solo trae el servidor Jenkins (Java); `docker` (cliente), `aws` CLI y `terraform` se instalaron dentro del contenedor ya en marcha, vía SSM Run Command, por rapidez. **Limitación conocida**: eso vive en el filesystem de ese contenedor concreto, no es reproducible si el contenedor se recrea. La solución correcta de producción sería un `Dockerfile.jenkins` propio que extienda la imagen oficial e incluya esas herramientas, usado en el `user_data` en vez de la imagen oficial a pelo — documentado aquí como mejora pendiente, no implementada por falta de tiempo.
 - **Amazon ECR** — registro de imágenes, tags por commit SHA (permite rollback a versión anterior)
 - **Amazon S3** — un único bucket, usado solo por el script Python de housekeeping (backups), **no** como backend de Terraform (ver sección 5)
 - **AWS Systems Manager (SSM)** — despliegue remoto y administración de ambas instancias sin SSH
@@ -99,12 +101,12 @@ En producción real (sin las restricciones de la cuenta de estudiante) esto se s
 ## 7. Prácticas de "producción" aplicadas
 
 - Trunk-based development: ramas `feature/*` cortas, PR obligatoria antes de `main`, el pipeline de Jenkins como gate (no se despliega si fallan los tests)
-- Imágenes inmutables: cada build se etiqueta con el commit SHA; nunca se despliega `latest` a ciegas
+- Imágenes inmutables: cada build se etiqueta con el commit SHA; no existe tag `latest` en este proyecto, así que nunca es ambiguo qué versión corre (ver sección 3, tag `:stable`)
 - `terraform plan` siempre se revisa antes de `apply`
 - Variables de Terraform (`terraform.tfvars`) para poder escalar a varios entornos sin reescribir código
 - Logs centralizados en CloudWatch en vez de en la terminal de la instancia
 - Tagging de todo recurso (`Project`, `Owner`, `Environment`) — control de coste y input para el script de housekeeping en Python
-- Rollback simple: se conserva la imagen anterior en ECR para poder volver atrás sin reconstruir
+- Rollback automático: el tag `:stable` en ECR siempre apunta a la última versión que pasó el smoke test; si un despliegue falla, el pipeline vuelve a esa versión sin reconstruir nada
 
 ## 8. Disponibilidad: qué es esto y qué no es
 
