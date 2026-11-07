@@ -12,22 +12,7 @@ terraform {
     }
   }
 
-  # Backend remoto S3 + locking en DynamoDB.
-  #
-  # El bloque backend "s3" se deja VACIO aqui a proposito: es una
-  # limitacion real de Terraform, el bloque backend no admite variables
-  # ni interpolacion (se resuelve antes de cargar el resto de la
-  # configuracion). Los valores reales (bucket, key, region,
-  # dynamodb_table, encrypt) se pasan en tiempo de init con:
-  #
-  #   terraform init -backend-config=backend.hcl
-  #
-  # backend.hcl (no versionado, ver backend.hcl.example) se rellena con
-  # los outputs de infra/terraform-bootstrap, que es el Terraform
-  # independiente y minimo que crea el bucket y la tabla de locking
-  # (con estado LOCAL, para evitar el problema de huevo-y-gallina: este
-  # backend no puede crear con Terraform el propio bucket que necesita
-  # para inicializarse). Ver docs/ARCHITECTURE.md seccion 5.
+
   backend "s3" {}
 }
 
