@@ -1,0 +1,32 @@
+# Terraform: estado y credenciales locales, nunca se versionan
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+backend.hcl
+!backend.hcl.example
+crash.log
+crash.*.log
+
+# Python: entornos y artefactos generados, no fuente
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Sistema operativo / editor: ruido local de cada máquina
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Datos locales generados en runtime, no fuente
+*.db
+
+# Secretos locales
+.env

@@ -1,0 +1,18 @@
+# Copia este fichero a terraform.tfvars y ajusta los valores.
+# terraform.tfvars NO debe subirse al repositorio (añadelo a .gitignore).
+
+aws_profile  = "estudiante"
+aws_region   = "eu-west-1"
+project_name = "task-tracker"
+owner        = "cristina"
+environment  = "dev"
+
+# OBLIGATORIO: tu IP publica actual en formato CIDR /32.
+# Averiguala con, por ejemplo: curl -s https://checkip.amazonaws.com
+# Sin valor por defecto a proposito: cambia cada sesion/red y nunca debe
+# ser 0.0.0.0/0 (abriria la UI de Jenkins a todo Internet).
+allowed_ip = "203.0.113.42/32"
+
+instance_type       = "t3.micro"
+log_retention_days  = 14
+cpu_alarm_threshold = 75

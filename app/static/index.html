@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Task / Incident Tracker</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #161d2e;
+    --panel-border: #263048;
+    --text: #e8ecf7;
+    --muted: #8b95ab;
+    --accent: #5b8cff;
+    --ok: #35d08a;
+    --warn: #f5b942;
+    --danger: #ef5a6f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2440 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
+  h1 { font-size: 1.4rem; margin: 0; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+
+  .badges { display: flex; gap: 8px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.78rem; padding: 5px 10px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--panel-border); color: var(--muted);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .dot.bad { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 14px; padding: 20px; margin-bottom: 20px;
+  }
+  .panel h2 { margin: 0 0 14px; font-size: 0.95rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  form { display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 140px; }
+
+  input, select, textarea {
+    background: #0f1420; border: 1px solid var(--panel-border); color: var(--text);
+    border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+
+  button {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 10px 16px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  button.ghost {
+    background: transparent; border: 1px solid var(--panel-border); color: var(--muted);
+    padding: 6px 10px; font-weight: 500; font-size: 0.78rem;
+  }
+  button.ghost:hover { border-color: var(--danger); color: var(--danger); opacity: 1; }
+
+  .task-list { display: flex; flex-direction: column; gap: 10px; }
+  .task {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: #0f1420; border: 1px solid var(--panel-border); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .task-main { min-width: 0; }
+  .task-title { font-weight: 600; font-size: 0.95rem; margin: 0 0 2px; word-break: break-word; }
+  .task-desc { color: var(--muted); font-size: 0.82rem; margin: 0; word-break: break-word; }
+
+  .status { font-size: 0.72rem; font-weight: 700; padding: 4px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+  .status.open { background: rgba(91,140,255,0.15); color: var(--accent); }
+  .status.in_progress { background: rgba(245,185,66,0.15); color: var(--warn); }
+  .status.closed { background: rgba(53,208,138,0.15); color: var(--ok); }
+
+  .empty { color: var(--muted); font-size: 0.88rem; text-align: center; padding: 20px 0; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--danger); color: white; padding: 10px 18px; border-radius: 8px;
+    font-size: 0.85rem; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Task<span>/</span>Incident Tracker</h1>
+      <div class="badges">
+        <span class="badge"><span id="health-dot" class="dot"></span><span id="health-text">comprobando…</span></span>
+        <span class="badge" id="version-badge">sha: …</span>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>Nueva incidencia</h2>
+      <form id="task-form">
+        <input id="title" type="text" placeholder="Título" required maxlength="200" />
+        <textarea id="description" placeholder="Descripción (opcional)" rows="2"></textarea>
+        <div class="row">
+          <select id="status">
+            <option value="open">open</option>
+            <option value="in_progress">in_progress</option>
+            <option value="closed">closed</option>
+          </select>
+          <button type="submit">Crear</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Incidencias</h2>
+      <div id="task-list" class="task-list">
+        <p class="empty">Cargando…</p>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const API = "";
+
+    async function fetchJSON(url, options) {
+      const res = await fetch(API + url, options);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = (data && data.error) ? data.error : `error ${res.status}`;
+        throw new Error(message);
+      }
+      return data;
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    async function loadHealth() {
+      const dot = document.getElementById("health-dot");
+      const text = document.getElementById("health-text");
+      try {
+        await fetchJSON("/health");
+        dot.className = "dot ok";
+        text.textContent = "api ok";
+      } catch {
+        dot.className = "dot bad";
+        text.textContent = "api caída";
+      }
+    }
+
+    async function loadVersion() {
+      const badge = document.getElementById("version-badge");
+      try {
+        const data = await fetchJSON("/version");
+        badge.textContent = "sha: " + data.git_sha;
+      } catch {
+        badge.textContent = "sha: ?";
+      }
+    }
+
+    function taskRow(task) {
+      const el = document.createElement("div");
+      el.className = "task";
+      el.innerHTML = `
+        <div class="task-main">
+          <p class="task-title">${escapeHtml(task.title)}</p>
+          ${task.description ? `<p class="task-desc">${escapeHtml(task.description)}</p>` : ""}
+        </div>
+      `;
+      const right = document.createElement("div");
+      right.style.display = "flex";
+      right.style.alignItems = "center";
+      right.style.gap = "8px";
+
+      const statusEl = document.createElement("span");
+      statusEl.className = "status " + task.status;
+      statusEl.textContent = task.status;
+      right.appendChild(statusEl);
+
+      const del = document.createElement("button");
+      del.className = "ghost";
+      del.textContent = "Eliminar";
+      del.onclick = () => deleteTask(task.id);
+      right.appendChild(del);
+
+      el.appendChild(right);
+      return el;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    async function loadTasks() {
+      const list = document.getElementById("task-list");
+      try {
+        const tasks = await fetchJSON("/tasks");
+        list.innerHTML = "";
+        if (tasks.length === 0) {
+          list.innerHTML = '<p class="empty">No hay incidencias todavía.</p>';
+          return;
+        }
+        tasks.slice().reverse().forEach((t) => list.appendChild(taskRow(t)));
+      } catch (err) {
+        list.innerHTML = `<p class="empty">Error al cargar: ${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    async function deleteTask(id) {
+      try {
+        await fetchJSON(`/tasks/${id}`, { method: "DELETE" });
+        loadTasks();
+      } catch (err) {
+        showToast(err.message);
+      }
+    }
+
+    document.getElementById("task-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = document.getElementById("title").value;
+      const description = document.getElementById("description").value;
+      const status = document.getElementById("status").value;
+      try {
+        await fetchJSON("/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, description, status }),
+        });
+        e.target.reset();
+        loadTasks();
+      } catch (err) {
+        showToast(err.message);
+      }
+    });
+
+    loadHealth();
+    loadVersion();
+    loadTasks();
+  </script>
+</body>
+</html>

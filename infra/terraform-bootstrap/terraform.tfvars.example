@@ -1,0 +1,8 @@
+# Copia este fichero a terraform.tfvars y ajusta los valores.
+# Deben coincidir con project_name/aws_region del Terraform principal
+# (infra/terraform), ya que de ahi derivan los nombres del bucket y la tabla.
+
+aws_profile  = "estudiante"
+aws_region   = "eu-west-1"
+project_name = "task-tracker"
+owner        = "cristina"

@@ -1,0 +1,17 @@
+# Copia este fichero a backend.hcl y rellena los valores reales
+# (bucket y dynamodb_table son outputs de infra/terraform-bootstrap:
+# `terraform output tfstate_bucket_name` / `terraform output tfstate_lock_table_name`).
+#
+# backend.hcl NO se versiona (ver .gitignore en la raiz del proyecto):
+# en equipo cada persona/entorno podria apuntar a un bucket distinto,
+# y el bloque backend "s3" {} de main.tf se deja vacio a proposito
+# porque no admite variables ni interpolacion.
+#
+# Uso:
+#   terraform init -backend-config=backend.hcl
+
+bucket         = "task-tracker-tfstate-<account-id>"
+key            = "aws-devops-showcase/terraform.tfstate"
+region         = "eu-west-1"
+dynamodb_table = "task-tracker-tfstate-lock"
+encrypt        = true
