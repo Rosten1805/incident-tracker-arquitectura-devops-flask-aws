@@ -6,17 +6,12 @@ API REST mínima de gestión de incidencias, usada como base para construir un s
 
 ![Arquitectura DevOps Flask en AWS](docs/architecture-diagram.png)
 
-**Nota**: este diagrama es el diseño original, dibujado antes de construir el proyecto — sirve para la vista de pájaro, no como referencia exacta pieza por pieza. Durante la construcción, algunas decisiones evolucionaron respecto al plan inicial:
+**Dos matices frente al diagrama**, por si se comparan con el detalle de la implementación real:
 
-| En el diagrama | En la implementación final | Por qué |
-|---|---|---|
-| Dockerfile "multi-stage" | Dockerfile de una sola etapa | Las dependencias (Flask, Gunicorn) son Python puro sin compilación nativa; un segundo stage no reduce tamaño real |
-| AWS Secrets Manager | No implementado en v1 | La app no tiene secretos reales que guardar todavía |
-| Pipeline de 10 stages, incluye `terraform apply` | Pipeline de 7 stages + rollback automático, **sin** `terraform apply` | Darle a Jenkins permiso para tocar IAM/EC2/ALB rompería el mínimo privilegio de sus roles; la infraestructura se gestiona aparte, con una cadencia de cambio distinta a la de los despliegues de la app |
-| VPC propia aislada | VPC por defecto de la cuenta | Suficiente para el alcance de este proyecto; evita gestionar NAT Gateways/rutas adicionales sin necesidad real |
-| Rollback a "la versión anterior" (genérico) | Rollback al tag `:stable` en ECR, que solo se mueve cuando un despliegue pasa el smoke test | El rollback nunca depende de inspeccionar el estado del servidor remoto — siempre sabe a qué volver |
+- **VPC**: el diagrama agrupa todo bajo una caja "VPC (red del proyecto)" por claridad visual. En la implementación real se usa la **VPC por defecto de la cuenta**, no una VPC dedicada — suficiente para el alcance de este proyecto, evita gestionar NAT Gateways/rutas adicionales sin necesidad real.
+- **ECR y S3** aparecen dentro de esa caja de VPC en el diagrama por agrupación visual, pero son servicios **regionales** de AWS, no recursos que vivan dentro de una VPC (salvo que se usen VPC endpoints, que no es el caso aquí).
 
-El resto —flujo de CI/CD, ALB, despliegue vía SSM Run Command sin SSH, CloudWatch para observabilidad— se construyó tal cual se diseñó.
+El resto del diagrama —los 7 stages del pipeline, los dos roles IAM, los dos repos ECR, los dos buckets S3, el rollback al tag `:stable`, el flujo de logs/métricas— es fiel a la implementación real, no a un diseño idealizado.
 
 ---
 
