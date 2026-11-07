@@ -71,13 +71,23 @@ resource "aws_iam_role_policy" "jenkins_deploy" {
         Resource = "*"
       },
       {
-        Sid    = "EnviarComandoSoloAAppServer"
-        Effect = "Allow"
-        Action = ["ssm:SendCommand"]
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
-          "arn:aws:ec2:${var.aws_region}:*:instance/*",
-        ]
+        # SendCommand necesita permiso sobre DOS recursos a la vez (el
+        # documento que ejecuta y la instancia destino), evaluados por
+        # separado. Juntarlos en un unico statement con una sola Condition
+        # no funciona: la condicion de tag no tiene sentido para el
+        # documento (no es una instancia EC2, no tiene esa tag), asi que
+        # esa mitad de la comprobacion falla y deniega TODA la accion.
+        # Por eso van en dos statements distintos.
+        Sid      = "EnviarComandoAlDocumentoRunShellScript"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript"
+      },
+      {
+        Sid      = "EnviarComandoSoloAAppServer"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = "arn:aws:ec2:${var.aws_region}:*:instance/*"
         Condition = {
           StringEquals = {
             "ssm:resourceTag/Name" = "${var.project_name}-app-server"
