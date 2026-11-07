@@ -159,7 +159,7 @@ void deployTag(String tag) {
     "docker pull ${env.IMAGE}:${tag}",
     "docker stop app || true",
     "docker rm app || true",
-    "docker run -d --name app --restart unless-stopped -p ${env.APP_PORT}:${env.APP_PORT} ${env.IMAGE}:${tag}"
+    "docker run -d --name app --restart unless-stopped -p ${env.APP_PORT}:${env.APP_PORT} --log-driver awslogs --log-opt awslogs-region=${env.AWS_REGION} --log-opt awslogs-group=/${env.PROJECT_NAME}/app-server --log-opt awslogs-stream=app ${env.IMAGE}:${tag}"
   ]
 }"""
     sh """
